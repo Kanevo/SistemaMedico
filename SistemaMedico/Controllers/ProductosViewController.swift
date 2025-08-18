@@ -1,7 +1,5 @@
 import UIKit
 import CoreData
-import Firebase
-import FirebaseFirestore
 
 class ProductosViewController: UIViewController {
     
@@ -19,12 +17,35 @@ class ProductosViewController: UIViewController {
         super.viewDidLoad()
         configurarUI()
         configurarTableView()
+        configurarObservers() // ← NUEVO
         cargarProductos()
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         cargarProductos()
+    }
+    
+    // NUEVO: Configurar observadores NotificationCenter
+    private func configurarObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(productosActualizados),
+            name: .productosActualizados,
+            object: nil
+        )
+    }
+    
+    // NUEVO: Método que se ejecuta cuando se notifica actualización
+    @objc private func productosActualizados() {
+        DispatchQueue.main.async {
+            self.cargarProductos()
+        }
+    }
+    
+    // NUEVO: Limpiar observador al salir
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     // MARK: - Configuración
@@ -119,6 +140,9 @@ class ProductosViewController: UIViewController {
                 self.coreDataManager.actualizarStockProducto(producto: producto, nuevoStock: nuevoStock)
                 self.cargarProductos()
                 self.mostrarExito("Stock actualizado correctamente")
+                
+                // NUEVO: Notificar actualización para que se actualice el menu principal
+                NotificationCenter.default.post(name: .productosActualizados, object: nil)
             }
         })
         
@@ -189,6 +213,9 @@ extension ProductosViewController: UITableViewDelegate {
                 producto.setValue(false, forKey: "activo")
                 self.coreDataManager.saveContext()
                 self.cargarProductos()
+                
+                // NUEVO: Notificar actualización
+                NotificationCenter.default.post(name: .productosActualizados, object: nil)
             })
             
             alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel))

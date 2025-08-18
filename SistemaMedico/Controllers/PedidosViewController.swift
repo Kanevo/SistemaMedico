@@ -1,6 +1,5 @@
 import UIKit
 import CoreData
-import Firebase
 import FirebaseFirestore
 
 class PedidosViewController: UIViewController {
@@ -19,12 +18,35 @@ class PedidosViewController: UIViewController {
         configurarUI()
         configurarTableView()
         configurarSegmentedControl()
+        configurarObservers() // ← NUEVO
         cargarPedidos()
     }
     
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         cargarPedidos()
+    }
+    
+    // NUEVO: Configurar observadores NotificationCenter
+    private func configurarObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(pedidosActualizados),
+            name: .pedidosActualizados,
+            object: nil
+        )
+    }
+    
+    // NUEVO: Método que se ejecuta cuando se notifica actualización
+    @objc private func pedidosActualizados() {
+        DispatchQueue.main.async {
+            self.cargarPedidos()
+        }
+    }
+    
+    // NUEVO: Limpiar observador al salir
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     // MARK: - Configuración
@@ -117,6 +139,9 @@ class PedidosViewController: UIViewController {
                     self.coreDataManager.actualizarEstadoPedido(pedido: pedido, estado: estado)
                     self.cargarPedidos()
                     
+                    // NUEVO: Notificar actualización
+                    NotificationCenter.default.post(name: .pedidosActualizados, object: nil)
+                    
                     // Si el estado cambia a "Enviado", enviar a Firebase
                     if estado == "Enviado" {
                         self.enviarPedidoFirebase(pedido)
@@ -132,6 +157,38 @@ class PedidosViewController: UIViewController {
             popover.sourceView = view
             popover.sourceRect = CGRect(x: view.bounds.midX, y: view.bounds.midY, width: 0, height: 0)
             popover.permittedArrowDirections = []
+        }
+        
+        present(alert, animated: true)
+    }
+    
+    // NUEVO: Confirmar eliminación de pedido
+    private func mostrarConfirmacionEliminarPedido(pedido: NSManagedObject) {
+        let cliente = pedido.value(forKey: "cliente") as? String ?? ""
+        let estado = pedido.value(forKey: "estado") as? String ?? ""
+        
+        let alert = UIAlertController(
+            title: "Eliminar Pedido",
+            message: "¿Eliminar pedido de '\(cliente)'?\n\nEsto restaurará el stock de los productos.",
+            preferredStyle: .alert
+        )
+        
+        // Solo permitir eliminar pedidos no entregados
+        if estado == "Entregado" {
+            alert.message = "No se pueden eliminar pedidos ya entregados."
+            alert.addAction(UIAlertAction(title: "OK", style: .default))
+        } else {
+            alert.addAction(UIAlertAction(title: "Eliminar", style: .destructive) { _ in
+                self.coreDataManager.eliminarPedido(pedido)
+                self.cargarPedidos()
+                self.mostrarExito("✅ Pedido eliminado y stock restaurado")
+                
+                // NUEVO: Notificar actualización
+                NotificationCenter.default.post(name: .pedidosActualizados, object: nil)
+                NotificationCenter.default.post(name: .productosActualizados, object: nil) // También productos por stock restaurado
+            })
+            
+            alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel))
         }
         
         present(alert, animated: true)
@@ -169,6 +226,10 @@ class PedidosViewController: UIViewController {
                 switch result {
                 case .success(let mensaje):
                     self?.mostrarExito("✅ Pedido médico enviado a Firebase: \(mensaje)")
+                    
+                    // NUEVO: Notificar envío exitoso
+                    NotificationCenter.default.post(name: .pedidoEnviado, object: pedido)
+                    
                 case .failure(let error):
                     self?.mostrarError("Error al enviar a Firebase: \(error.localizedDescription)")
                 }
@@ -244,15 +305,24 @@ extension PedidosViewController: UITableViewDelegate {
         mostrarDetallePedido(pedido)
     }
     
+    // MEJORADO: Swipe actions con eliminar pedido
     func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         let pedido = pedidosFiltrados[indexPath.row]
         
+        // Acción: Cambiar Estado
         let cambiarEstado = UIContextualAction(style: .normal, title: "Estado") { _, _, completion in
             self.cambiarEstadoPedido(pedido)
             completion(true)
         }
         cambiarEstado.backgroundColor = .systemBlue
         
-        return UISwipeActionsConfiguration(actions: [cambiarEstado])
+        // NUEVO: Acción Eliminar
+        let eliminarPedido = UIContextualAction(style: .destructive, title: "Eliminar") { _, _, completion in
+            self.mostrarConfirmacionEliminarPedido(pedido: pedido)
+            completion(true)
+        }
+        eliminarPedido.backgroundColor = .systemRed
+        
+        return UISwipeActionsConfiguration(actions: [eliminarPedido, cambiarEstado])
     }
 }

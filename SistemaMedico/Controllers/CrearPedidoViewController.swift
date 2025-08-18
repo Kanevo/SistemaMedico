@@ -1,7 +1,5 @@
 import UIKit
 import CoreData
-import Firebase
-import FirebaseFirestore
 
 class CrearPedidoViewController: UIViewController {
     
@@ -63,6 +61,7 @@ class CrearPedidoViewController: UIViewController {
         dismiss(animated: true)
     }
     
+    // ACTUALIZADO: Crear pedido con NotificationCenter
     @IBAction func crearPedido(_ sender: UIButton) {
         guard validarDatos() else { return }
         
@@ -82,7 +81,11 @@ class CrearPedidoViewController: UIViewController {
             }
         }
         
-        mostrarExito("Pedido creado correctamente") {
+        mostrarExito("✅ Pedido creado correctamente") {
+            // NUEVO: Notificar actualización automática
+            NotificationCenter.default.post(name: .pedidosActualizados, object: nil)
+            NotificationCenter.default.post(name: .productosActualizados, object: nil) // También productos por stock
+            
             self.dismiss(animated: true)
         }
     }

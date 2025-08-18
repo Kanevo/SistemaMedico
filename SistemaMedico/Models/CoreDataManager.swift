@@ -141,3 +141,41 @@ class CoreDataManager {
         }
     }
 }
+
+extension CoreDataManager {
+    func eliminarProducto(_ producto: NSManagedObject) -> Bool {
+        if productoTienePedidosAsociados(producto) {
+            return false
+        }
+        producto.setValue(false, forKey: "activo")
+        saveContext()
+        return true
+    }
+    
+    private func productoTienePedidosAsociados(_ producto: NSManagedObject) -> Bool {
+        let request = NSFetchRequest<NSManagedObject>(entityName: "DetallePedido")
+        request.predicate = NSPredicate(format: "producto == %@", producto)
+        
+        do {
+            let detalles = try context.fetch(request)
+            return !detalles.isEmpty
+        } catch {
+            return true
+        }
+    }
+    
+    func eliminarPedido(_ pedido: NSManagedObject) {
+        let detalles = obtenerDetallesPedido(pedido: pedido)
+        
+        for detalle in detalles {
+            if let producto = detalle.value(forKey: "producto") as? NSManagedObject {
+                let cantidad = detalle.value(forKey: "cantidad") as? Int32 ?? 0
+                let stockActual = producto.value(forKey: "stock") as? Int32 ?? 0
+                producto.setValue(stockActual + cantidad, forKey: "stock")
+            }
+        }
+        
+        context.delete(pedido)
+        saveContext()
+    }
+}

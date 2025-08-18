@@ -1,8 +1,9 @@
-//
-//  NotificationExtensions.swift
-//  SistemaMedico
-//
-//  Created by DAMII on 18/08/25.
-//
-
 import Foundation
+
+// MARK: - Extensiones de Notification.Name
+extension Notification.Name {
+    static let productosActualizados = Notification.Name("productosActualizados")
+    static let pedidosActualizados = Notification.Name("pedidosActualizados")
+    static let stockBajo = Notification.Name("stockBajo")
+    static let pedidoEnviado = Notification.Name("pedidoEnviado")
+}

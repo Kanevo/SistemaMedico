@@ -1,6 +1,4 @@
 import UIKit
-import Firebase
-import FirebaseFirestore
 
 class AgregarProductoViewController: UIViewController {
     
@@ -82,6 +80,7 @@ class AgregarProductoViewController: UIViewController {
         view.endEditing(true)
     }
     
+    // ACTUALIZADO: Guardar producto con NotificationCenter
     @IBAction func guardarProducto(_ sender: UIButton) {
         guard validarCampos() else { return }
         
@@ -99,7 +98,10 @@ class AgregarProductoViewController: UIViewController {
             stockMinimo: stockMinimo
         )
         
-        mostrarExito("Producto guardado correctamente") {
+        mostrarExito("✅ Producto guardado correctamente") {
+            // NUEVO: Notificar actualización automática
+            NotificationCenter.default.post(name: .productosActualizados, object: nil)
+            
             self.dismiss(animated: true)
         }
     }

@@ -191,3 +191,26 @@ enum FirebaseError: Error, LocalizedError {
         }
     }
 }
+
+extension FirebaseService {
+    func sincronizarAutomaticamente() {
+        obtenerProductosDesdeFirebase { result in
+            switch result {
+            case .success(let productos):
+                self.actualizarCoreDataConProductos(productos)
+            case .failure(let error):
+                print("Error en sincronización automática: \(error)")
+            }
+        }
+    }
+    
+    private func actualizarCoreDataConProductos(_ productos: [ProductoAPI]) {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .productosActualizados, object: nil)
+        }
+    }
+}
+
+
+
+
