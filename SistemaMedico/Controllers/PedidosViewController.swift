@@ -1,5 +1,7 @@
 import UIKit
 import CoreData
+import Firebase
+import FirebaseFirestore
 
 class PedidosViewController: UIViewController {
     
@@ -115,9 +117,9 @@ class PedidosViewController: UIViewController {
                     self.coreDataManager.actualizarEstadoPedido(pedido: pedido, estado: estado)
                     self.cargarPedidos()
                     
-                    // Si el estado cambia a "Enviado", enviar a API
+                    // Si el estado cambia a "Enviado", enviar a Firebase
                     if estado == "Enviado" {
-                        self.enviarPedidoAPI(pedido)
+                        self.enviarPedidoFirebase(pedido)
                     }
                 })
             }
@@ -135,7 +137,7 @@ class PedidosViewController: UIViewController {
         present(alert, animated: true)
     }
     
-    private func enviarPedidoAPI(_ pedido: NSManagedObject) {
+    private func enviarPedidoFirebase(_ pedido: NSManagedObject) {
         let cliente = pedido.value(forKey: "cliente") as? String ?? ""
         let destino = pedido.value(forKey: "destino") as? String ?? ""
         let total = pedido.value(forKey: "total") as? Double ?? 0.0
@@ -151,7 +153,7 @@ class PedidosViewController: UIViewController {
                 let cantidad = detalle.value(forKey: "cantidad") as? Int32 ?? 0
                 
                 productos.append(ProductoPedidoAPI(
-                    id: 1, // ID simulado
+                    id: Int.random(in: 1...1000), // ID único
                     nombre: nombre,
                     cantidad: Int(cantidad),
                     precio: precio
@@ -161,13 +163,14 @@ class PedidosViewController: UIViewController {
         
         let pedidoAPI = PedidoAPI(cliente: cliente, destino: destino, productos: productos, total: total)
         
-        APIService.shared.enviarPedido(pedido: pedidoAPI) { [weak self] result in
+        // Usar Firebase en lugar de APIService
+        FirebaseService.shared.enviarPedido(pedido: pedidoAPI) { [weak self] result in
             DispatchQueue.main.async {
                 switch result {
                 case .success(let mensaje):
-                    self?.mostrarExito(mensaje)
+                    self?.mostrarExito("✅ Pedido médico enviado a Firebase: \(mensaje)")
                 case .failure(let error):
-                    self?.mostrarError("Error al enviar: \(error.localizedDescription)")
+                    self?.mostrarError("Error al enviar a Firebase: \(error.localizedDescription)")
                 }
             }
         }

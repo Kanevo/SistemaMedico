@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B7F4EB032E53206800F8761C /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = B7F4EB022E53206800F8761C /* FirebaseAuth */; };
+		B7F4EB052E53206800F8761C /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = B7F4EB042E53206800F8761C /* FirebaseFirestore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		B7F4EA812E52D85100F8761C /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -65,6 +70,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B7F4EB032E53206800F8761C /* FirebaseAuth in Frameworks */,
+				B7F4EB052E53206800F8761C /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -125,6 +132,8 @@
 			);
 			name = SistemaMedico;
 			packageProductDependencies = (
+				B7F4EB022E53206800F8761C /* FirebaseAuth */,
+				B7F4EB042E53206800F8761C /* FirebaseFirestore */,
 			);
 			productName = SistemaMedico;
 			productReference = B7F4EA672E52D85000F8761C /* SistemaMedico.app */;
@@ -208,6 +217,9 @@
 			);
 			mainGroup = B7F4EA5E2E52D85000F8761C;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				B7F4EB012E53206800F8761C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B7F4EA682E52D85000F8761C /* Products */;
 			projectDirPath = "";
@@ -563,6 +575,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		B7F4EB012E53206800F8761C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B7F4EB022E53206800F8761C /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B7F4EB012E53206800F8761C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		B7F4EB042E53206800F8761C /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B7F4EB012E53206800F8761C /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = B7F4EA5F2E52D85000F8761C /* Project object */;
 }

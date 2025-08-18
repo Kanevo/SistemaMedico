@@ -1,5 +1,7 @@
 import UIKit
 import CoreData
+import Firebase
+import FirebaseFirestore
 
 class MenuPrincipalViewController: UIViewController {
     
@@ -15,7 +17,7 @@ class MenuPrincipalViewController: UIViewController {
     
     // MARK: - Propiedades
     private let coreDataManager = CoreDataManager.shared
-    private let apiService = APIService.shared
+    private let firebaseService = FirebaseService.shared // Cambiado de APIService
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -40,7 +42,7 @@ class MenuPrincipalViewController: UIViewController {
         configurarBoton(btnProductos, titulo: "📦 Gestionar Productos", color: .systemBlue)
         configurarBoton(btnPedidos, titulo: "📋 Gestionar Pedidos", color: .systemGreen)
         configurarBoton(btnReportes, titulo: "📊 Ver Reportes", color: .systemOrange)
-        configurarBoton(btnSincronizar, titulo: "🔄 Sincronizar Datos", color: .systemPurple)
+        configurarBoton(btnSincronizar, titulo: "☁️ Sincronizar con Firebase", color: .systemPurple)
         
         // Configurar vista de alertas
         viewAlertas.backgroundColor = UIColor.systemYellow.withAlphaComponent(0.3)
@@ -79,7 +81,11 @@ class MenuPrincipalViewController: UIViewController {
     @IBAction func sincronizarDatos(_ sender: UIButton) {
         mostrarIndicadorCarga(true)
         
-        apiService.obtenerProductosDesdeAPI { [weak self] result in
+        // Primero inicializar productos médicos en Firebase (solo primera vez)
+        firebaseService.inicializarProductosMedicos()
+        
+        // Luego obtener productos desde Firebase
+        firebaseService.obtenerProductosDesdeFirebase { [weak self] result in
             DispatchQueue.main.async {
                 self?.mostrarIndicadorCarga(false)
                 
@@ -87,7 +93,7 @@ class MenuPrincipalViewController: UIViewController {
                 case .success(let productos):
                     self?.sincronizarProductos(productos)
                 case .failure(let error):
-                    self?.mostrarError("Error al sincronizar: \(error.localizedDescription)")
+                    self?.mostrarError("Error al sincronizar con Firebase: \(error.localizedDescription)")
                 }
             }
         }
@@ -102,12 +108,15 @@ class MenuPrincipalViewController: UIViewController {
     }
     
     private func crearDatosIniciales() {
-        // Crear algunos productos iniciales
+        // Crear algunos productos médicos iniciales
         coreDataManager.crearProducto(nombre: "Paracetamol 500mg", categoria: "Medicamentos", precio: 15.50, stock: 100, stockMinimo: 20)
         coreDataManager.crearProducto(nombre: "Jeringas 5ml", categoria: "Insumos", precio: 2.30, stock: 500, stockMinimo: 100)
         coreDataManager.crearProducto(nombre: "Termómetro Digital", categoria: "Equipos", precio: 45.00, stock: 15, stockMinimo: 10)
-        coreDataManager.crearProducto(nombre: "Mascarillas N95", categoria: "Insumos", precio: 8.75, stock: 5, stockMinimo: 25) // Stock bajo intencionalmente
+        coreDataManager.crearProducto(nombre: "Mascarillas N95", categoria: "Insumos", precio: 8.75, stock: 5, stockMinimo: 25)
         coreDataManager.crearProducto(nombre: "Oxímetro de Pulso", categoria: "Equipos", precio: 120.00, stock: 8, stockMinimo: 5)
+        coreDataManager.crearProducto(nombre: "Ibuprofeno 400mg", categoria: "Medicamentos", precio: 18.00, stock: 25, stockMinimo: 15)
+        coreDataManager.crearProducto(nombre: "Alcohol en Gel", categoria: "Insumos", precio: 12.50, stock: 30, stockMinimo: 20)
+        coreDataManager.crearProducto(nombre: "Tensiómetro Digital", categoria: "Equipos", precio: 85.00, stock: 12, stockMinimo: 8)
     }
     
     private func actualizarEstadisticas() {
@@ -120,6 +129,7 @@ class MenuPrincipalViewController: UIViewController {
         lblEstadisticas.text = """
         📦 Productos registrados: \(totalProductos)
         📋 Pedidos realizados: \(totalPedidos)
+        ☁️ Conectado a Firebase
         """
     }
     
@@ -128,7 +138,7 @@ class MenuPrincipalViewController: UIViewController {
         
         if !productosStockBajo.isEmpty {
             viewAlertas.isHidden = false
-            lblAlertas.text = "⚠️ \(productosStockBajo.count) producto(s) con stock bajo"
+            lblAlertas.text = "⚠️ \(productosStockBajo.count) producto(s) médico(s) con stock bajo"
         } else {
             viewAlertas.isHidden = true
         }
@@ -154,15 +164,15 @@ class MenuPrincipalViewController: UIViewController {
         }
         
         actualizarEstadisticas()
-        mostrarExito("Datos sincronizados correctamente")
+        mostrarExito("✅ Productos médicos sincronizados con Firebase exitosamente")
     }
     
     private func mostrarIndicadorCarga(_ mostrar: Bool) {
         if mostrar {
-            btnSincronizar.setTitle("🔄 Sincronizando...", for: .normal)
+            btnSincronizar.setTitle("☁️ Sincronizando...", for: .normal)
             btnSincronizar.isEnabled = false
         } else {
-            btnSincronizar.setTitle("🔄 Sincronizar Datos", for: .normal)
+            btnSincronizar.setTitle("☁️ Sincronizar con Firebase", for: .normal)
             btnSincronizar.isEnabled = true
         }
     }
