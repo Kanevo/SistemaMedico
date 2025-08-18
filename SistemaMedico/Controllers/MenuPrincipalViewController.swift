@@ -1,5 +1,7 @@
 import UIKit
 import CoreData
+import Firebase
+import FirebaseFirestore
 
 class MenuPrincipalViewController: UIViewController {
     
@@ -15,12 +17,13 @@ class MenuPrincipalViewController: UIViewController {
     
     // MARK: - Propiedades
     private let coreDataManager = CoreDataManager.shared
-    private let apiService = APIService.shared
+    private let firebaseService = FirebaseService.shared
+    private var yaSeNotifico = false // ← NUEVO: Para evitar bucle de alertas
     
     override func viewDidLoad() {
         super.viewDidLoad()
         configurarUI()
-        configurarObservers() // ← NUEVO
+        configurarObservers() // ← NUEVO: NotificationCenter
         verificarDatosIniciales()
     }
     
@@ -30,7 +33,7 @@ class MenuPrincipalViewController: UIViewController {
         verificarAlertas()
     }
     
-    // NUEVO: Configurar observadores NotificationCenter
+    // ✅ NUEVO: Configurar observadores NotificationCenter
     private func configurarObservers() {
         // Escuchar cuando se actualicen productos o pedidos
         NotificationCenter.default.addObserver(
@@ -47,14 +50,6 @@ class MenuPrincipalViewController: UIViewController {
             object: nil
         )
         
-        // Escuchar cuando se detecte stock bajo
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(stockBajoDetectado),
-            name: .stockBajo,
-            object: nil
-        )
-        
         // Escuchar cuando se envíe un pedido
         NotificationCenter.default.addObserver(
             self,
@@ -64,7 +59,7 @@ class MenuPrincipalViewController: UIViewController {
         )
     }
     
-    // NUEVO: Método que se ejecuta cuando se actualizan datos
+    // ✅ NUEVO: Método que se ejecuta cuando se actualizan datos
     @objc private func datosActualizados() {
         DispatchQueue.main.async {
             self.actualizarEstadisticas()
@@ -72,25 +67,14 @@ class MenuPrincipalViewController: UIViewController {
         }
     }
     
-    // NUEVO: Método para stock bajo
-    @objc private func stockBajoDetectado(notification: Notification) {
-        DispatchQueue.main.async {
-            if let userInfo = notification.userInfo,
-               let mensaje = userInfo["mensaje"] as? String {
-                self.mostrarAlertaStockBajo(mensaje)
-            }
-            self.verificarAlertas()
-        }
-    }
-    
-    // NUEVO: Método para pedido enviado
+    // ✅ NUEVO: Método para pedido enviado
     @objc private func pedidoEnviado(notification: Notification) {
         DispatchQueue.main.async {
             self.mostrarExito("📤 Pedido enviado exitosamente a Firebase")
         }
     }
     
-    // NUEVO: Limpiar observadores al salir
+    // ✅ NUEVO: Limpiar observadores al salir
     deinit {
         NotificationCenter.default.removeObserver(self)
     }
@@ -106,7 +90,7 @@ class MenuPrincipalViewController: UIViewController {
         configurarBoton(btnProductos, titulo: "📦 Gestionar Productos", color: .systemBlue)
         configurarBoton(btnPedidos, titulo: "📋 Gestionar Pedidos", color: .systemGreen)
         configurarBoton(btnReportes, titulo: "📊 Ver Reportes", color: .systemOrange)
-        configurarBoton(btnSincronizar, titulo: "🔄 Sincronizar Datos", color: .systemPurple)
+        configurarBoton(btnSincronizar, titulo: "☁️ Sincronizar con Firebase", color: .systemPurple)
         
         // Configurar vista de alertas
         viewAlertas.backgroundColor = UIColor.systemYellow.withAlphaComponent(0.3)
@@ -145,7 +129,11 @@ class MenuPrincipalViewController: UIViewController {
     @IBAction func sincronizarDatos(_ sender: UIButton) {
         mostrarIndicadorCarga(true)
         
-        apiService.obtenerProductosDesdeAPI { [weak self] result in
+        // Primero inicializar productos médicos en Firebase (solo primera vez)
+        firebaseService.inicializarProductosMedicos()
+        
+        // Luego obtener productos desde Firebase
+        firebaseService.obtenerProductosDesdeFirebase { [weak self] result in
             DispatchQueue.main.async {
                 self?.mostrarIndicadorCarga(false)
                 
@@ -153,7 +141,7 @@ class MenuPrincipalViewController: UIViewController {
                 case .success(let productos):
                     self?.sincronizarProductos(productos)
                 case .failure(let error):
-                    self?.mostrarError("Error al sincronizar: \(error.localizedDescription)")
+                    self?.mostrarError("Error al sincronizar con Firebase: \(error.localizedDescription)")
                 }
             }
         }
@@ -168,14 +156,17 @@ class MenuPrincipalViewController: UIViewController {
     }
     
     private func crearDatosIniciales() {
-        // Crear algunos productos iniciales
+        // Crear algunos productos médicos iniciales
         coreDataManager.crearProducto(nombre: "Paracetamol 500mg", categoria: "Medicamentos", precio: 15.50, stock: 100, stockMinimo: 20)
         coreDataManager.crearProducto(nombre: "Jeringas 5ml", categoria: "Insumos", precio: 2.30, stock: 500, stockMinimo: 100)
         coreDataManager.crearProducto(nombre: "Termómetro Digital", categoria: "Equipos", precio: 45.00, stock: 15, stockMinimo: 10)
-        coreDataManager.crearProducto(nombre: "Mascarillas N95", categoria: "Insumos", precio: 8.75, stock: 5, stockMinimo: 25) // Stock bajo intencionalmente
+        coreDataManager.crearProducto(nombre: "Mascarillas N95", categoria: "Insumos", precio: 8.75, stock: 5, stockMinimo: 25)
         coreDataManager.crearProducto(nombre: "Oxímetro de Pulso", categoria: "Equipos", precio: 120.00, stock: 8, stockMinimo: 5)
+        coreDataManager.crearProducto(nombre: "Ibuprofeno 400mg", categoria: "Medicamentos", precio: 18.00, stock: 25, stockMinimo: 15)
+        coreDataManager.crearProducto(nombre: "Alcohol en Gel", categoria: "Insumos", precio: 12.50, stock: 30, stockMinimo: 20)
+        coreDataManager.crearProducto(nombre: "Tensiómetro Digital", categoria: "Equipos", precio: 85.00, stock: 12, stockMinimo: 8)
         
-        // NUEVO: Notificar que se crearon productos iniciales
+        // ✅ NUEVO: Notificar que se crearon productos iniciales
         NotificationCenter.default.post(name: .productosActualizados, object: nil)
     }
     
@@ -189,32 +180,32 @@ class MenuPrincipalViewController: UIViewController {
         lblEstadisticas.text = """
         📦 Productos registrados: \(totalProductos)
         📋 Pedidos realizados: \(totalPedidos)
+        ☁️ Conectado a Firebase
         """
     }
     
+    // ✅ CORREGIDO: Sin bucle infinito de alertas
     private func verificarAlertas() {
         let productosStockBajo = coreDataManager.obtenerProductosStockBajo()
         
         if !productosStockBajo.isEmpty {
             viewAlertas.isHidden = false
-            lblAlertas.text = "⚠️ \(productosStockBajo.count) producto(s) con stock bajo"
+            lblAlertas.text = "⚠️ \(productosStockBajo.count) producto(s) médico(s) con stock bajo"
             
-            // NUEVO: Notificar stock bajo si hay productos
-            for producto in productosStockBajo {
-                NotificationCenter.default.post(
-                    name: .stockBajo,
-                    object: producto,
-                    userInfo: [
-                        "mensaje": "Stock bajo detectado en \(producto.value(forKey: "nombre") as? String ?? "")"
-                    ]
-                )
+            // ✅ CORREGIDO: Solo mostrar alerta una vez
+            if !yaSeNotifico {
+                yaSeNotifico = true
+                mostrarAlertaStockBajo("Se detectaron \(productosStockBajo.count) productos médicos con stock bajo")
             }
         } else {
             viewAlertas.isHidden = true
+            yaSeNotifico = false // Resetear para próxima vez
         }
     }
     
     private func sincronizarProductos(_ productos: [ProductoAPI]) {
+        var productosNuevos = 0
+        
         for producto in productos {
             // Solo agregar si no existe
             let productosExistentes = coreDataManager.obtenerProductos()
@@ -230,29 +221,35 @@ class MenuPrincipalViewController: UIViewController {
                     stock: Int32.random(in: 10...100),
                     stockMinimo: Int32.random(in: 5...25)
                 )
+                productosNuevos += 1
             }
         }
         
-        // NUEVO: Notificar actualización después de sincronizar
+        // ✅ NUEVO: Notificar actualización después de sincronizar
         NotificationCenter.default.post(name: .productosActualizados, object: nil)
         
         actualizarEstadisticas()
-        mostrarExito("Datos sincronizados correctamente")
+        
+        if productosNuevos > 0 {
+            mostrarExito("✅ \(productosNuevos) productos médicos nuevos sincronizados con Firebase")
+        } else {
+            mostrarExito("✅ Productos médicos sincronizados con Firebase - Sin productos nuevos")
+        }
     }
     
     private func mostrarIndicadorCarga(_ mostrar: Bool) {
         if mostrar {
-            btnSincronizar.setTitle("🔄 Sincronizando...", for: .normal)
+            btnSincronizar.setTitle("☁️ Sincronizando...", for: .normal)
             btnSincronizar.isEnabled = false
         } else {
-            btnSincronizar.setTitle("🔄 Sincronizar Datos", for: .normal)
+            btnSincronizar.setTitle("☁️ Sincronizar con Firebase", for: .normal)
             btnSincronizar.isEnabled = true
         }
     }
     
-    // NUEVO: Mostrar alerta de stock bajo
+    // ✅ NUEVO: Mostrar alerta de stock bajo sin bucle
     private func mostrarAlertaStockBajo(_ mensaje: String) {
-        let alert = UIAlertController(title: "⚠️ Alerta de Stock", message: mensaje, preferredStyle: .alert)
+        let alert = UIAlertController(title: "⚠️ Alerta de Stock Médico", message: mensaje, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Ver Productos", style: .default) { _ in
             self.irAProductos(self.btnProductos)
         })

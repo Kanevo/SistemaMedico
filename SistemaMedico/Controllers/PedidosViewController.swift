@@ -18,7 +18,7 @@ class PedidosViewController: UIViewController {
         configurarUI()
         configurarTableView()
         configurarSegmentedControl()
-        configurarObservers() // ← NUEVO
+        configurarObservers() // ← NotificationCenter
         cargarPedidos()
     }
     
@@ -27,7 +27,7 @@ class PedidosViewController: UIViewController {
         cargarPedidos()
     }
     
-    // NUEVO: Configurar observadores NotificationCenter
+    // MARK: - NotificationCenter
     private func configurarObservers() {
         NotificationCenter.default.addObserver(
             self,
@@ -37,14 +37,12 @@ class PedidosViewController: UIViewController {
         )
     }
     
-    // NUEVO: Método que se ejecuta cuando se notifica actualización
     @objc private func pedidosActualizados() {
         DispatchQueue.main.async {
             self.cargarPedidos()
         }
     }
     
-    // NUEVO: Limpiar observador al salir
     deinit {
         NotificationCenter.default.removeObserver(self)
     }
@@ -53,7 +51,6 @@ class PedidosViewController: UIViewController {
     private func configurarUI() {
         title = "Pedidos"
         
-        // Botón para crear nuevo pedido
         navigationItem.rightBarButtonItem = UIBarButtonItem(
             barButtonSystemItem: .add,
             target: self,
@@ -139,10 +136,10 @@ class PedidosViewController: UIViewController {
                     self.coreDataManager.actualizarEstadoPedido(pedido: pedido, estado: estado)
                     self.cargarPedidos()
                     
-                    // NUEVO: Notificar actualización
+                    // NotificationCenter
                     NotificationCenter.default.post(name: .pedidosActualizados, object: nil)
                     
-                    // Si el estado cambia a "Enviado", enviar a Firebase
+                    // ✅ FIREBASE: Solo cuando cambia a "Enviado"
                     if estado == "Enviado" {
                         self.enviarPedidoFirebase(pedido)
                     }
@@ -162,7 +159,6 @@ class PedidosViewController: UIViewController {
         present(alert, animated: true)
     }
     
-    // NUEVO: Confirmar eliminación de pedido
     private func mostrarConfirmacionEliminarPedido(pedido: NSManagedObject) {
         let cliente = pedido.value(forKey: "cliente") as? String ?? ""
         let estado = pedido.value(forKey: "estado") as? String ?? ""
@@ -183,9 +179,9 @@ class PedidosViewController: UIViewController {
                 self.cargarPedidos()
                 self.mostrarExito("✅ Pedido eliminado y stock restaurado")
                 
-                // NUEVO: Notificar actualización
+                // NotificationCenter
                 NotificationCenter.default.post(name: .pedidosActualizados, object: nil)
-                NotificationCenter.default.post(name: .productosActualizados, object: nil) // También productos por stock restaurado
+                NotificationCenter.default.post(name: .productosActualizados, object: nil)
             })
             
             alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel))
@@ -194,6 +190,7 @@ class PedidosViewController: UIViewController {
         present(alert, animated: true)
     }
     
+    // ✅ FIREBASE: Enviar pedido cuando estado = "Enviado"
     private func enviarPedidoFirebase(_ pedido: NSManagedObject) {
         let cliente = pedido.value(forKey: "cliente") as? String ?? ""
         let destino = pedido.value(forKey: "destino") as? String ?? ""
@@ -210,7 +207,7 @@ class PedidosViewController: UIViewController {
                 let cantidad = detalle.value(forKey: "cantidad") as? Int32 ?? 0
                 
                 productos.append(ProductoPedidoAPI(
-                    id: Int.random(in: 1...1000), // ID único
+                    id: Int.random(in: 1...1000),
                     nombre: nombre,
                     cantidad: Int(cantidad),
                     precio: precio
@@ -220,14 +217,14 @@ class PedidosViewController: UIViewController {
         
         let pedidoAPI = PedidoAPI(cliente: cliente, destino: destino, productos: productos, total: total)
         
-        // Usar Firebase en lugar de APIService
+        // ✅ USAR FIREBASE
         FirebaseService.shared.enviarPedido(pedido: pedidoAPI) { [weak self] result in
             DispatchQueue.main.async {
                 switch result {
                 case .success(let mensaje):
                     self?.mostrarExito("✅ Pedido médico enviado a Firebase: \(mensaje)")
                     
-                    // NUEVO: Notificar envío exitoso
+                    // NotificationCenter
                     NotificationCenter.default.post(name: .pedidoEnviado, object: pedido)
                     
                 case .failure(let error):
@@ -305,7 +302,6 @@ extension PedidosViewController: UITableViewDelegate {
         mostrarDetallePedido(pedido)
     }
     
-    // MEJORADO: Swipe actions con eliminar pedido
     func tableView(_ tableView: UITableView, trailingSwipeActionsConfigurationForRowAt indexPath: IndexPath) -> UISwipeActionsConfiguration? {
         let pedido = pedidosFiltrados[indexPath.row]
         
@@ -316,7 +312,7 @@ extension PedidosViewController: UITableViewDelegate {
         }
         cambiarEstado.backgroundColor = .systemBlue
         
-        // NUEVO: Acción Eliminar
+        // Acción Eliminar
         let eliminarPedido = UIContextualAction(style: .destructive, title: "Eliminar") { _, _, completion in
             self.mostrarConfirmacionEliminarPedido(pedido: pedido)
             completion(true)
