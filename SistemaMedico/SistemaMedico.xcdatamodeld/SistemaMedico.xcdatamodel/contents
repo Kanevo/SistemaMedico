@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="23605" systemVersion="24D70" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+    <entity name="DetallePedido" representedClassName="DetallePedido" syncable="YES" codeGenerationType="class">
+        <attribute name="cantidad" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="pedido" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Pedido" inverseName="detalles" inverseEntity="Pedido"/>
+        <relationship name="producto" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="Producto" inverseName="detalles" inverseEntity="Producto"/>
+    </entity>
+    <entity name="Pedido" representedClassName="Pedido" syncable="YES" codeGenerationType="class">
+        <attribute name="cliente" optional="YES" attributeType="String"/>
+        <attribute name="destino" optional="YES" attributeType="String"/>
+        <attribute name="estado" optional="YES" attributeType="String"/>
+        <attribute name="fechaCreacion" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="total" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <relationship name="detalles" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="DetallePedido" inverseName="pedido" inverseEntity="DetallePedido"/>
+    </entity>
+    <entity name="Producto" representedClassName="Producto" syncable="YES" codeGenerationType="class">
+        <attribute name="activo" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="categoria" optional="YES" attributeType="String"/>
+        <attribute name="fechaCreacion" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="nombre" optional="YES" attributeType="String"/>
+        <attribute name="precio" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="stock" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="stockMinimo" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <relationship name="detalles" optional="YES" toMany="YES" deletionRule="Nullify" destinationEntity="DetallePedido" inverseName="producto" inverseEntity="DetallePedido"/>
+    </entity>
+</model>
