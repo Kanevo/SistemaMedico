@@ -211,6 +211,29 @@ extension FirebaseService {
     }
 }
 
-
+extension ProductoFirebase {
+    
+    // ✅ NUEVO: Inicializador personalizado con valores específicos de stock
+    init(id: String? = nil,
+         nombre: String,
+         categoria: String,
+         precio: Double,
+         descripcion: String,
+         stock: Int,
+         stockMinimo: Int,
+         activo: Bool = true,
+         fechaCreacion: Date = Date()) {
+        
+        self.id = id
+        self.nombre = nombre
+        self.categoria = categoria
+        self.precio = precio
+        self.descripcion = descripcion
+        self.stock = stock
+        self.stockMinimo = stockMinimo
+        self.activo = activo
+        self.fechaCreacion = fechaCreacion
+    }
+}
 
 
