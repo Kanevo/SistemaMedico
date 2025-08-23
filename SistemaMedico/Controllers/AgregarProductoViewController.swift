@@ -1,8 +1,9 @@
 import UIKit
+import CoreData
 
 class AgregarProductoViewController: UIViewController {
     
-    // MARK: - Outlets
+    // MARK: - Outlets (MANTENIENDO NOMBRES ORIGINALES)
     @IBOutlet weak var txtNombre: UITextField!
     @IBOutlet weak var pickerCategoria: UIPickerView!
     @IBOutlet weak var txtPrecio: UITextField!
@@ -12,7 +13,7 @@ class AgregarProductoViewController: UIViewController {
     
     // MARK: - Propiedades
     private let coreDataManager = CoreDataManager.shared
-    private let firebaseService = FirebaseService.shared // ← AGREGADO
+    private let firebaseService = FirebaseService.shared // ✅ AGREGADO FIREBASE
     private let categorias = ["Medicamentos", "Equipos", "Insumos", "Dispositivos", "Consumibles"]
     private var categoriaSeleccionada = "Medicamentos"
     
@@ -64,16 +65,7 @@ class AgregarProductoViewController: UIViewController {
         let stock = Int32(txtStock.text!)!
         let stockMinimo = Int32(txtStockMinimo.text!)!
         
-        // ✅ NUEVO: Crear ProductoAPI para Firebase
-        let productoAPI = ProductoAPI(
-            id: Int.random(in: 1...1000),
-            nombre: nombre,
-            categoria: categoriaSeleccionada,
-            precio: precio,
-            descripcion: "Producto médico de alta calidad"
-        )
-        
-        // ✅ NUEVO: Crear ProductoFirebase con valores reales de stock
+        // ✅ AGREGADO: Crear ProductoFirebase con valores reales de stock
         let productoFirebase = ProductoFirebase(
             id: nil,
             nombre: nombre,
@@ -89,18 +81,20 @@ class AgregarProductoViewController: UIViewController {
         // Mostrar indicador de carga
         mostrarIndicadorCarga(true)
         
-        // ✅ MODIFICADO: Primero subir a Firebase, luego a CoreData
+        // ✅ AGREGADO: Primero subir a Firebase, luego a CoreData
         firebaseService.subirProducto(producto: productoFirebase) { [weak self] result in
             DispatchQueue.main.async {
                 switch result {
                 case .success(let mensaje):
+                    print("✅ Firebase exitoso: \(mensaje)")
                     // Si Firebase fue exitoso, guardar en CoreData
                     self?.guardarEnCoreData(
                         nombre: nombre,
                         categoria: self?.categoriaSeleccionada ?? "Medicamentos",
                         precio: precio,
                         stock: stock,
-                        stockMinimo: stockMinimo
+                        stockMinimo: stockMinimo,
+                        mensajeExito: "✅ Producto guardado correctamente en CoreData y Firebase"
                     )
                     
                 case .failure(let error):
@@ -112,18 +106,16 @@ class AgregarProductoViewController: UIViewController {
                         categoria: self?.categoriaSeleccionada ?? "Medicamentos",
                         precio: precio,
                         stock: stock,
-                        stockMinimo: stockMinimo
+                        stockMinimo: stockMinimo,
+                        mensajeExito: "⚠️ Producto guardado localmente. Error al sincronizar con Firebase: \(error.localizedDescription)"
                     )
-                    
-                    // Mostrar advertencia sobre Firebase pero confirmar que se guardó localmente
-                    self?.mostrarAdvertencia("⚠️ Producto guardado localmente. Error al sincronizar con Firebase: \(error.localizedDescription)")
                 }
             }
         }
     }
     
-    // ✅ NUEVO: Método separado para guardar en CoreData
-    private func guardarEnCoreData(nombre: String, categoria: String, precio: Double, stock: Int32, stockMinimo: Int32) {
+    // ✅ AGREGADO: Método separado para guardar en CoreData
+    private func guardarEnCoreData(nombre: String, categoria: String, precio: Double, stock: Int32, stockMinimo: Int32, mensajeExito: String) {
         // Guardar en Core Data
         coreDataManager.crearProducto(
             nombre: nombre,
@@ -135,8 +127,8 @@ class AgregarProductoViewController: UIViewController {
         
         mostrarIndicadorCarga(false)
         
-        mostrarExito("✅ Producto guardado correctamente en CoreData y Firebase") {
-            // Notificar actualización automática
+        mostrarExito(mensajeExito) {
+            // ✅ AGREGADO: Notificar actualización automática
             NotificationCenter.default.post(name: .productosActualizados, object: nil)
             
             self.dismiss(animated: true)
@@ -175,7 +167,17 @@ class AgregarProductoViewController: UIViewController {
         return true
     }
     
-    // MARK: - Métodos auxiliares
+    // MARK: - UI Helpers
+    private func mostrarIndicadorCarga(_ mostrar: Bool) {
+        if mostrar {
+            btnGuardar.setTitle("⏳ Guardando...", for: .normal)
+            btnGuardar.isEnabled = false
+        } else {
+            btnGuardar.setTitle("💾 Guardar Producto", for: .normal)
+            btnGuardar.isEnabled = true
+        }
+    }
+    
     private func mostrarError(_ mensaje: String) {
         let alert = UIAlertController(title: "Error", message: mensaje, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
@@ -188,45 +190,6 @@ class AgregarProductoViewController: UIViewController {
             completion()
         })
         present(alert, animated: true)
-    }
-    
-    // ✅ NUEVO: Método para mostrar advertencias
-    private func mostrarAdvertencia(_ mensaje: String) {
-        let alert = UIAlertController(title: "Advertencia", message: mensaje, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
-            // Notificar actualización automática
-            NotificationCenter.default.post(name: .productosActualizados, object: nil)
-            
-            self.dismiss(animated: true)
-        })
-        present(alert, animated: true)
-    }
-    
-    // ✅ NUEVO: Método para mostrar/ocultar indicador de carga
-    private func mostrarIndicadorCarga(_ mostrar: Bool) {
-        if mostrar {
-            btnGuardar.isEnabled = false
-            btnGuardar.setTitle("Guardando...", for: .normal)
-            btnGuardar.backgroundColor = .systemGray
-            
-            // Opcional: agregar activity indicator
-            let activityIndicator = UIActivityIndicatorView(style: .medium)
-            activityIndicator.color = .white
-            activityIndicator.tag = 999 // Tag para poder removerlo después
-            activityIndicator.startAnimating()
-            
-            btnGuardar.addSubview(activityIndicator)
-            activityIndicator.center = CGPoint(x: btnGuardar.frame.width - 30, y: btnGuardar.frame.height / 2)
-        } else {
-            btnGuardar.isEnabled = true
-            btnGuardar.setTitle("Guardar Producto", for: .normal)
-            btnGuardar.backgroundColor = .systemBlue
-            
-            // Remover activity indicator
-            if let activityIndicator = btnGuardar.viewWithTag(999) {
-                activityIndicator.removeFromSuperview()
-            }
-        }
     }
 }
 
@@ -251,5 +214,3 @@ extension AgregarProductoViewController: UIPickerViewDelegate {
         categoriaSeleccionada = categorias[row]
     }
 }
-
-// NOTA: Las Notification.Name ya están declaradas en NotificationExtensions.swift
