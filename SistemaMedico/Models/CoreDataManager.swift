@@ -112,8 +112,8 @@ class CoreDataManager {
     
     // MARK: - ✅ MÉTODOS PARA DETALLE DE PEDIDO CON DESCUENTO AUTOMÁTICO
     
-    /// ✅ CORREGIDO: Agregar detalle con descuento automático de stock
-    func agregarDetallePedido(pedido: NSManagedObject, producto: NSManagedObject, cantidad: Int32) {
+    /// ✅ CORREGIDO: Agregar detalle con descuento automático de stock EN COREDATA Y FIREBASE
+    func agregarDetallePedido(pedido: NSManagedObject, producto: NSManagedObject, cantidad: Int32, firebaseService: FirebaseService? = nil) {
         let detalle = NSEntityDescription.entity(forEntityName: "DetallePedido", in: context)!
         let nuevoDetalle = NSManagedObject(entity: detalle, insertInto: context)
         
@@ -121,7 +121,7 @@ class CoreDataManager {
         nuevoDetalle.setValue(pedido, forKey: "pedido")
         nuevoDetalle.setValue(producto, forKey: "producto")
         
-        // ✅ DESCUENTO AUTOMÁTICO DE STOCK
+        // ✅ DESCUENTO AUTOMÁTICO DE STOCK EN COREDATA
         let stockActual = producto.value(forKey: "stock") as! Int32
         let nuevoStock = stockActual - cantidad
         
@@ -132,7 +132,22 @@ class CoreDataManager {
         
         actualizarStockProducto(producto: producto, nuevoStock: nuevoStock)
         
-        print("✅ Stock descontado automáticamente: \(producto.value(forKey: "nombre") ?? "producto") - \(cantidad) unidades. Stock nuevo: \(nuevoStock)")
+        print("✅ Stock descontado en CoreData: \(producto.value(forKey: "nombre") ?? "producto") - \(cantidad) unidades. Stock nuevo: \(nuevoStock)")
+        
+        // 🔥 NUEVO: DESCUENTO AUTOMÁTICO EN FIREBASE
+        if let firebaseService = firebaseService {
+            let nombreProducto = producto.value(forKey: "nombre") as? String ?? ""
+            
+            firebaseService.actualizarProducto(nombre: nombreProducto, nuevoStock: Int(nuevoStock)) { result in
+                switch result {
+                case .success(_):
+                    print("✅ Stock actualizado automáticamente en Firebase: \(nombreProducto)")
+                case .failure(let error):
+                    print("⚠️ Error al actualizar stock en Firebase: \(error.localizedDescription)")
+                    // Nota: El pedido continúa, solo falla la sincronización con Firebase
+                }
+            }
+        }
         
         saveContext()
     }
@@ -262,6 +277,29 @@ extension CoreDataManager {
         } catch {
             print("Error al obtener pedidos por estado: \(error)")
             return []
+        }
+    }
+    // MARK: - ✅ NUEVO: MÉTODO UNIVERSAL PARA ACTUALIZAR STOCK
+    /// Actualiza stock tanto en CoreData como en Firebase automáticamente
+    func actualizarStockUniversal(producto: NSManagedObject, nuevoStock: Int32, firebaseService: FirebaseService, completion: @escaping (Bool) -> Void) {
+        
+        // 1. Actualizar en CoreData
+        actualizarStockProducto(producto: producto, nuevoStock: nuevoStock)
+        
+        // 2. Actualizar en Firebase
+        let nombreProducto = producto.value(forKey: "nombre") as? String ?? ""
+        
+        firebaseService.actualizarProducto(nombre: nombreProducto, nuevoStock: Int(nuevoStock)) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(_):
+                    print("✅ Stock sincronizado universalmente: \(nombreProducto) = \(nuevoStock)")
+                    completion(true)
+                case .failure(let error):
+                    print("⚠️ Error en sincronización Firebase: \(error.localizedDescription)")
+                    completion(false)
+                }
+            }
         }
     }
     }
