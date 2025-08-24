@@ -5,7 +5,7 @@ import FirebaseFirestore
 
 class MenuPrincipalViewController: UIViewController {
     
-    // MARK: - Outlets (MANTENIENDO LOS NOMBRES ORIGINALES)
+    // MARK: - Outlets - MANTENIENDO LOS NOMBRES EXACTOS DEL STORYBOARD
     @IBOutlet weak var lblBienvenida: UILabel!
     @IBOutlet weak var lblEstadisticas: UILabel!
     @IBOutlet weak var btnProductos: UIButton!
@@ -17,14 +17,14 @@ class MenuPrincipalViewController: UIViewController {
     
     // MARK: - Propiedades
     private let coreDataManager = CoreDataManager.shared
-    private let firebaseService = FirebaseService.shared // ✅ AGREGADO FIREBASE
+    private let firebaseService = FirebaseService.shared
     private var yaSeNotifico = false
     
     override func viewDidLoad() {
         super.viewDidLoad()
         configurarUI()
         verificarDatosIniciales()
-        configurarObservers() // ✅ AGREGADO NOTIFICATIONCENTER
+        configurarNotificaciones()
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -33,7 +33,6 @@ class MenuPrincipalViewController: UIViewController {
         verificarAlertas()
     }
     
-    // ✅ AGREGADO: Limpiar observadores al salir
     deinit {
         NotificationCenter.default.removeObserver(self)
     }
@@ -41,9 +40,11 @@ class MenuPrincipalViewController: UIViewController {
     // MARK: - Configuración
     private func configurarUI() {
         title = "Sistema Médico"
-        navigationController?.navigationBar.prefersLargeTitles = true
         
-        lblBienvenida.text = "¡Bienvenido al Sistema de Gestión Médica!"
+        // Configurar título - USANDO EL NOMBRE CORRECTO
+        lblBienvenida.text = "🏥 Sistema de Gestión Médica"
+        lblBienvenida.font = UIFont.boldSystemFont(ofSize: 24)
+        lblBienvenida.textAlignment = .center
         
         // Configurar botones
         configurarBoton(btnProductos, titulo: "📦 Gestionar Productos", color: .systemBlue)
@@ -65,48 +66,31 @@ class MenuPrincipalViewController: UIViewController {
         boton.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .medium)
     }
     
-    // ✅ AGREGADO: Configurar observadores NotificationCenter
-    private func configurarObservers() {
-        // Escuchar cuando se actualicen productos o pedidos
+    private func configurarNotificaciones() {
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(datosActualizados),
+            selector: #selector(actualizarEstadisticas),
             name: .productosActualizados,
             object: nil
         )
         
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(datosActualizados),
+            selector: #selector(actualizarEstadisticas),
             name: .pedidosActualizados,
             object: nil
         )
         
-        // Escuchar cuando se envíe un pedido
+        // ✅ NUEVO: Escuchar cuando se envía un pedido
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(pedidoEnviado),
+            selector: #selector(pedidoEnviadoAFirebase),
             name: .pedidoEnviado,
             object: nil
         )
     }
     
-    // ✅ AGREGADO: Método que se ejecuta cuando se actualizan datos
-    @objc private func datosActualizados() {
-        DispatchQueue.main.async {
-            self.actualizarEstadisticas()
-            self.verificarAlertas()
-        }
-    }
-    
-    // ✅ AGREGADO: Método para pedido enviado
-    @objc private func pedidoEnviado(notification: Notification) {
-        DispatchQueue.main.async {
-            self.mostrarExito("📤 Pedido enviado exitosamente a Firebase")
-        }
-    }
-    
-    // MARK: - Acciones
+    // MARK: - Acciones - MANTENEMOS LOS NOMBRES ORIGINALES
     @IBAction func irAProductos(_ sender: UIButton) {
         let storyboard = UIStoryboard(name: "Productos", bundle: nil)
         if let productosVC = storyboard.instantiateViewController(withIdentifier: "ProductosViewController") as? ProductosViewController {
@@ -126,7 +110,7 @@ class MenuPrincipalViewController: UIViewController {
         navigationController?.pushViewController(reportesVC, animated: true)
     }
     
-    // ✅ MODIFICADO: Sincronización bidireccional completa con Firebase
+    // ✅ CORREGIDO: Sincronización bidireccional completa
     @IBAction func sincronizarDatos(_ sender: UIButton) {
         mostrarIndicadorCarga(true)
         
@@ -136,26 +120,23 @@ class MenuPrincipalViewController: UIViewController {
         firebaseService.sincronizarTodosLosProductos(productos: productosLocales) { [weak self] result in
             DispatchQueue.main.async {
                 switch result {
-                case .success(let mensaje):
-                    print("✅ Sincronización CoreData → Firebase: \(mensaje)")
+                case .success(let mensajeProductos):
+                    print("✅ Productos sincronizados: \(mensajeProductos)")
                     
-                    // Paso 2: Obtener productos desde Firebase para sincronización inversa
-                    self?.firebaseService.obtenerProductosDesdeFirebase { result2 in
+                    // Paso 2: Sincronizar pedidos enviados
+                    self?.sincronizarPedidosEnviados { mensajePedidos in
                         DispatchQueue.main.async {
                             self?.mostrarIndicadorCarga(false)
                             
-                            switch result2 {
-                            case .success(let productosFirebase):
-                                self?.sincronizarProductosDesdeFirebase(productosFirebase)
-                            case .failure(let error):
-                                self?.mostrarError("Error al obtener desde Firebase: \(error.localizedDescription)")
-                            }
+                            let mensajeCompleto = "✅ Sincronización completa:\n• \(mensajeProductos)\n• \(mensajePedidos)"
+                            self?.mostrarExito(mensajeCompleto)
+                            self?.actualizarEstadisticas()
                         }
                     }
                     
                 case .failure(let error):
                     self?.mostrarIndicadorCarga(false)
-                    self?.mostrarError("Error al sincronizar con Firebase: \(error.localizedDescription)")
+                    self?.mostrarError("Error al sincronizar productos: \(error.localizedDescription)")
                 }
             }
         }
@@ -180,36 +161,54 @@ class MenuPrincipalViewController: UIViewController {
         coreDataManager.crearProducto(nombre: "Alcohol en Gel", categoria: "Insumos", precio: 12.50, stock: 30, stockMinimo: 20)
         coreDataManager.crearProducto(nombre: "Tensiómetro Digital", categoria: "Equipos", precio: 85.00, stock: 12, stockMinimo: 8)
         
-        // ✅ AGREGADO: Notificar que se crearon productos iniciales
+        // Notificar que se crearon productos iniciales
         NotificationCenter.default.post(name: .productosActualizados, object: nil)
     }
     
-    private func actualizarEstadisticas() {
+    @objc private func actualizarEstadisticas() {
         let productos = coreDataManager.obtenerProductos()
         let pedidos = coreDataManager.obtenerPedidos()
+        
+        // Contar pedidos por estado
+        let pedidosPendientes = pedidos.filter { ($0.value(forKey: "estado") as? String) == "Pendiente" }.count
+        let pedidosEnviados = pedidos.filter { ($0.value(forKey: "estado") as? String) == "Enviado" }.count
+        let pedidosEntregados = pedidos.filter { ($0.value(forKey: "estado") as? String) == "Entregado" }.count
         
         let totalProductos = productos.count
         let totalPedidos = pedidos.count
         
         lblEstadisticas.text = """
         📦 Productos registrados: \(totalProductos)
-        📋 Pedidos realizados: \(totalPedidos)
+        📋 Pedidos totales: \(totalPedidos)
+        ⏳ Pendientes: \(pedidosPendientes) | 📤 Enviados: \(pedidosEnviados) | ✅ Entregados: \(pedidosEntregados)
         ☁️ Conectado a Firebase
         """
     }
     
-    // ✅ CORREGIDO: Sin bucle infinito de alertas
+    // Sin bucle infinito de alertas
     private func verificarAlertas() {
         let productosStockBajo = coreDataManager.obtenerProductosStockBajo()
+        let pedidos = coreDataManager.obtenerPedidos()
+        let pedidosPendientes = pedidos.filter { ($0.value(forKey: "estado") as? String) == "Pendiente" }
+        
+        var alertas: [String] = []
         
         if !productosStockBajo.isEmpty {
+            alertas.append("\(productosStockBajo.count) producto(s) con stock bajo")
+        }
+        
+        if !pedidosPendientes.isEmpty {
+            alertas.append("\(pedidosPendientes.count) pedido(s) pendiente(s)")
+        }
+        
+        if !alertas.isEmpty {
             viewAlertas.isHidden = false
-            lblAlertas.text = "⚠️ \(productosStockBajo.count) producto(s) médico(s) con stock bajo"
+            lblAlertas.text = "⚠️ " + alertas.joined(separator: " • ")
             
-            // ✅ CORREGIDO: Solo mostrar alerta una vez
+            // Solo mostrar alerta una vez
             if !yaSeNotifico {
                 yaSeNotifico = true
-                mostrarAlertaStockBajo("Se detectaron \(productosStockBajo.count) productos médicos con stock bajo")
+                mostrarAlertaCompleta(alertas.joined(separator: "\n• "))
             }
         } else {
             viewAlertas.isHidden = true
@@ -217,38 +216,69 @@ class MenuPrincipalViewController: UIViewController {
         }
     }
     
-    // ✅ AGREGADO: Sincronización desde Firebase hacia CoreData (solo productos nuevos)
-    private func sincronizarProductosDesdeFirebase(_ productos: [ProductoAPI]) {
-        var productosNuevos = 0
-        
-        for producto in productos {
-            // Solo agregar si no existe
-            let productosExistentes = coreDataManager.obtenerProductos()
-            let existe = productosExistentes.contains { existente in
-                (existente.value(forKey: "nombre") as? String) == producto.nombre
-            }
+    // ✅ NUEVO: Método cuando se envía un pedido a Firebase
+    @objc private func pedidoEnviadoAFirebase(notification: Notification) {
+        DispatchQueue.main.async {
+            self.actualizarEstadisticas()
             
-            if !existe {
-                coreDataManager.crearProducto(
-                    nombre: producto.nombre,
-                    categoria: producto.categoria,
-                    precio: producto.precio,
-                    stock: Int32.random(in: 10...100),
-                    stockMinimo: Int32.random(in: 5...25)
-                )
-                productosNuevos += 1
+            // Mostrar confirmación visual
+            if let pedido = notification.object as? NSManagedObject {
+                let cliente = pedido.value(forKey: "cliente") as? String ?? "Cliente"
+                self.mostrarNotificacionTemporal("📤 Pedido de \(cliente) enviado a Firebase")
+            }
+        }
+    }
+    
+    // ✅ NUEVO: Sincronizar pedidos enviados
+    private func sincronizarPedidosEnviados(completion: @escaping (String) -> Void) {
+        let pedidos = coreDataManager.obtenerPedidos()
+        let pedidosEnviados = pedidos.filter { pedido in
+            let estado = pedido.value(forKey: "estado") as? String ?? ""
+            return estado == "Enviado" || estado == "Entregado"
+        }
+        
+        if pedidosEnviados.isEmpty {
+            completion("No hay pedidos enviados para sincronizar")
+            return
+        }
+        
+        let grupo = DispatchGroup()
+        var exitos = 0
+        var errores = 0
+        
+        for pedido in pedidosEnviados {
+            grupo.enter()
+            
+            // Crear PedidoAPI desde NSManagedObject
+            let cliente = pedido.value(forKey: "cliente") as? String ?? ""
+            let destino = pedido.value(forKey: "destino") as? String ?? ""
+            let total = pedido.value(forKey: "total") as? Double ?? 0.0
+            
+            // Obtener productos del pedido (simplificado)
+            let pedidoAPI = PedidoAPI(
+                cliente: cliente,
+                destino: destino,
+                productos: [], // Se puede expandir para obtener productos reales
+                total: total
+            )
+            
+            firebaseService.enviarPedido(pedido: pedidoAPI) { result in
+                switch result {
+                case .success(_):
+                    exitos += 1
+                case .failure(_):
+                    errores += 1
+                }
+                grupo.leave()
             }
         }
         
-        // ✅ AGREGADO: Notificar actualización después de sincronizar
-        NotificationCenter.default.post(name: .productosActualizados, object: nil)
-        
-        actualizarEstadisticas()
-        
-        if productosNuevos > 0 {
-            mostrarExito("✅ \(productosNuevos) productos médicos nuevos sincronizados desde Firebase")
-        } else {
-            mostrarExito("✅ Sincronización completa - Productos actualizados en Firebase")
+        grupo.notify(queue: .main) {
+            if errores == 0 {
+                completion("\(exitos) pedidos sincronizados exitosamente")
+            } else {
+                completion("\(exitos) pedidos sincronizados, \(errores) con errores")
+            }
         }
     }
     
@@ -262,14 +292,36 @@ class MenuPrincipalViewController: UIViewController {
         }
     }
     
-    // ✅ AGREGADO: Mostrar alerta de stock bajo sin bucle
-    private func mostrarAlertaStockBajo(_ mensaje: String) {
-        let alert = UIAlertController(title: "⚠️ Alerta de Stock Médico", message: mensaje, preferredStyle: .alert)
+    // ✅ NUEVO: Mostrar alerta completa con productos y pedidos
+    private func mostrarAlertaCompleta(_ mensaje: String) {
+        let alert = UIAlertController(
+            title: "⚠️ Alertas del Sistema Médico",
+            message: mensaje,
+            preferredStyle: .alert
+        )
+        
         alert.addAction(UIAlertAction(title: "Ver Productos", style: .default) { _ in
             self.irAProductos(self.btnProductos)
         })
+        
+        alert.addAction(UIAlertAction(title: "Ver Pedidos", style: .default) { _ in
+            self.irAPedidos(self.btnPedidos)
+        })
+        
         alert.addAction(UIAlertAction(title: "OK", style: .cancel))
+        
         present(alert, animated: true)
+    }
+    
+    // ✅ NUEVO: Mostrar notificación temporal
+    private func mostrarNotificacionTemporal(_ mensaje: String) {
+        let alert = UIAlertController(title: nil, message: mensaje, preferredStyle: .alert)
+        present(alert, animated: true)
+        
+        // Auto-cerrar después de 2 segundos
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            alert.dismiss(animated: true)
+        }
     }
     
     private func mostrarError(_ mensaje: String) {

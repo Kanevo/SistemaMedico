@@ -1,9 +1,8 @@
 import UIKit
-import CoreData
 
 class AgregarProductoViewController: UIViewController {
     
-    // MARK: - Outlets (MANTENIENDO NOMBRES ORIGINALES)
+    // MARK: - Outlets - MANTENEMOS LOS NOMBRES ORIGINALES
     @IBOutlet weak var txtNombre: UITextField!
     @IBOutlet weak var pickerCategoria: UIPickerView!
     @IBOutlet weak var txtPrecio: UITextField!
@@ -13,7 +12,7 @@ class AgregarProductoViewController: UIViewController {
     
     // MARK: - Propiedades
     private let coreDataManager = CoreDataManager.shared
-    private let firebaseService = FirebaseService.shared // ✅ AGREGADO FIREBASE
+    private let firebaseService = FirebaseService.shared // ✅ AGREGADO Firebase
     private let categorias = ["Medicamentos", "Equipos", "Insumos", "Dispositivos", "Consumibles"]
     private var categoriaSeleccionada = "Medicamentos"
     
@@ -65,7 +64,7 @@ class AgregarProductoViewController: UIViewController {
         let stock = Int32(txtStock.text!)!
         let stockMinimo = Int32(txtStockMinimo.text!)!
         
-        // ✅ AGREGADO: Crear ProductoFirebase con valores reales de stock
+        // ✅ NUEVO: Crear ProductoFirebase con valores reales de stock
         let productoFirebase = ProductoFirebase(
             id: nil,
             nombre: nombre,
@@ -81,7 +80,7 @@ class AgregarProductoViewController: UIViewController {
         // Mostrar indicador de carga
         mostrarIndicadorCarga(true)
         
-        // ✅ AGREGADO: Primero subir a Firebase, luego a CoreData
+        // ✅ NUEVO: Primero subir a Firebase, luego a CoreData
         firebaseService.subirProducto(producto: productoFirebase) { [weak self] result in
             DispatchQueue.main.async {
                 switch result {
@@ -114,7 +113,7 @@ class AgregarProductoViewController: UIViewController {
         }
     }
     
-    // ✅ AGREGADO: Método separado para guardar en CoreData
+    // ✅ NUEVO: Método separado para guardar en CoreData
     private func guardarEnCoreData(nombre: String, categoria: String, precio: Double, stock: Int32, stockMinimo: Int32, mensajeExito: String) {
         // Guardar en Core Data
         coreDataManager.crearProducto(
@@ -128,7 +127,7 @@ class AgregarProductoViewController: UIViewController {
         mostrarIndicadorCarga(false)
         
         mostrarExito(mensajeExito) {
-            // ✅ AGREGADO: Notificar actualización automática
+            // Notificar actualización automática
             NotificationCenter.default.post(name: .productosActualizados, object: nil)
             
             self.dismiss(animated: true)

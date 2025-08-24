@@ -147,7 +147,7 @@ class FirebaseService {
         }
     }
     
-    // NUEVO: Método para actualizar producto existente en Firebase
+    // Método para actualizar producto existente en Firebase
     func actualizarProducto(nombre: String, nuevoStock: Int, completion: @escaping (Result<String, Error>) -> Void) {
         // Buscar producto por nombre
         db.collection("productos")
@@ -176,7 +176,7 @@ class FirebaseService {
             }
     }
     
-    // NUEVO: Método para sincronizar TODOS los productos de CoreData a Firebase
+    // Método para sincronizar TODOS los productos de CoreData a Firebase
     func sincronizarTodosLosProductos(productos: [NSManagedObject], completion: @escaping (Result<String, Error>) -> Void) {
         let grupo = DispatchGroup()
         var errores: [Error] = []
@@ -218,7 +218,7 @@ class FirebaseService {
         }
     }
     
-    // NUEVO: Verificar si producto existe y actualizarlo o crearlo
+    // Verificar si producto existe y actualizarlo o crearlo
     private func verificarYActualizarProducto(nombre: String, categoria: String, precio: Double, stock: Int, stockMinimo: Int, completion: @escaping (Result<String, Error>) -> Void) {
         
         db.collection("productos")
@@ -260,6 +260,8 @@ class FirebaseService {
             }
     }
     
+    // MARK: - Pedidos
+    
     func enviarPedido(pedido: PedidoAPI, completion: @escaping (Result<String, Error>) -> Void) {
         let pedidoFirebase = PedidoFirebase(
             cliente: pedido.cliente,
@@ -284,7 +286,84 @@ class FirebaseService {
         }
     }
     
-    // MODIFICADO: Inicializar productos médicos con valores fijos específicos
+    // Método mejorado para enviar pedidos con estados
+    func enviarPedidoConEstado(pedido: PedidoAPI, estado: String = "Enviado", completion: @escaping (Result<String, Error>) -> Void) {
+        let pedidoFirebase = PedidoFirebase(
+            cliente: pedido.cliente,
+            destino: pedido.destino,
+            productos: pedido.productos.map { ProductoPedidoFirebase(
+                id: String($0.id),
+                nombre: $0.nombre,
+                cantidad: $0.cantidad,
+                precio: $0.precio
+            )},
+            total: pedido.total,
+            estado: estado,
+            fechaCreacion: Date()
+        )
+        
+        db.collection("pedidos").addDocument(data: pedidoFirebase.dictionary) { error in
+            if let error = error {
+                completion(.failure(error))
+            } else {
+                completion(.success("Pedido médico enviado exitosamente a Firebase con estado: \(estado)"))
+            }
+        }
+    }
+    
+    // Sincronizar pedidos enviados automáticamente
+    func sincronizarPedidosEnviados(pedidosLocales: [NSManagedObject], completion: @escaping (Result<String, Error>) -> Void) {
+        let pedidosEnviados = pedidosLocales.filter { pedido in
+            let estado = pedido.value(forKey: "estado") as? String ?? ""
+            return estado == "Enviado" || estado == "Entregado"
+        }
+        
+        if pedidosEnviados.isEmpty {
+            completion(.success("No hay pedidos enviados para sincronizar"))
+            return
+        }
+        
+        let grupo = DispatchGroup()
+        var errores: [Error] = []
+        var sincronizados = 0
+        
+        for pedido in pedidosEnviados {
+            grupo.enter()
+            
+            // Convertir NSManagedObject a PedidoAPI
+            let cliente = pedido.value(forKey: "cliente") as? String ?? ""
+            let destino = pedido.value(forKey: "destino") as? String ?? ""
+            let total = pedido.value(forKey: "total") as? Double ?? 0.0
+            let estado = pedido.value(forKey: "estado") as? String ?? "Enviado"
+            
+            let pedidoAPI = PedidoAPI(
+                cliente: cliente,
+                destino: destino,
+                productos: [], // Se puede expandir para obtener productos reales desde CoreData
+                total: total
+            )
+            
+            self.enviarPedidoConEstado(pedido: pedidoAPI, estado: estado) { resultado in
+                switch resultado {
+                case .success(_):
+                    sincronizados += 1
+                case .failure(let error):
+                    errores.append(error)
+                }
+                grupo.leave()
+            }
+        }
+        
+        grupo.notify(queue: .main) {
+            if errores.isEmpty {
+                completion(.success("✅ \(sincronizados) pedidos sincronizados exitosamente"))
+            } else {
+                completion(.failure(errores.first!))
+            }
+        }
+    }
+    
+    // Inicializar productos médicos con valores fijos específicos
     func inicializarProductosMedicos() {
         let productosMedicos = [
             ProductoFirebase(nombre: "Paracetamol 500mg", categoria: "Medicamentos", precio: 15.50, descripcion: "Analgésico y antipirético", stock: 100, stockMinimo: 20),

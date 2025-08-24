@@ -3,13 +3,13 @@ import CoreData
 
 class ProductosViewController: UIViewController {
     
-    // MARK: - Outlets (EXACTOS COMO EN TU STORYBOARD)
+    // MARK: - Outlets - MANTENEMOS LOS NOMBRES ORIGINALES
     @IBOutlet weak var tableView: UITableView!
     @IBOutlet weak var searchBar: UISearchBar!
     
     // MARK: - Propiedades
     private let coreDataManager = CoreDataManager.shared
-    private let firebaseService = FirebaseService.shared // ✅ AGREGADO FIREBASE
+    private let firebaseService = FirebaseService.shared // ✅ AGREGADO Firebase
     private var productos: [NSManagedObject] = []
     private var productosFiltrados: [NSManagedObject] = []
     private var estaFiltrando = false
@@ -27,7 +27,7 @@ class ProductosViewController: UIViewController {
         cargarProductos()
     }
     
-    // ✅ AGREGADO: Configurar observadores NotificationCenter
+    // Configurar observadores NotificationCenter
     private func configurarObservers() {
         NotificationCenter.default.addObserver(
             self,
@@ -37,14 +37,14 @@ class ProductosViewController: UIViewController {
         )
     }
     
-    // ✅ AGREGADO: Método que se ejecuta cuando se notifica actualización
+    // Método que se ejecuta cuando se notifica actualización
     @objc private func productosActualizados() {
         DispatchQueue.main.async {
             self.cargarProductos()
         }
     }
     
-    // ✅ AGREGADO: Limpiar observador al salir
+    // Limpiar observador al salir
     deinit {
         NotificationCenter.default.removeObserver(self)
     }
@@ -53,21 +53,7 @@ class ProductosViewController: UIViewController {
     private func configurarUI() {
         title = "Productos"
         
-        // Botón para agregar productos (derecha)
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            barButtonSystemItem: .add,
-            target: self,
-            action: #selector(agregarProducto)
-        )
-        
-        // ✅ MODIFICADO: Agregar ambos botones a la izquierda
-        let btnSync = UIBarButtonItem(
-            title: "🔄 Sync",
-            style: .plain,
-            target: self,
-            action: #selector(sincronizarConFirebase)
-        )
-        
+        // ✅ CORREGIDO: Botón de regreso al menú
         let btnBack = UIBarButtonItem(
             title: "🏠 Menú",
             style: .plain,
@@ -75,7 +61,22 @@ class ProductosViewController: UIViewController {
             action: #selector(regresarAlMenu)
         )
         
-        // Colocar ambos botones en la izquierda
+        // ✅ NUEVO: Botón de sincronización manual con Firebase
+        let btnSync = UIBarButtonItem(
+            title: "🔄 Sync",
+            style: .plain,
+            target: self,
+            action: #selector(sincronizarConFirebase)
+        )
+        
+        // Botón para agregar productos
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .add,
+            target: self,
+            action: #selector(agregarProducto)
+        )
+        
+        // ✅ CORREGIDO: Colocar ambos botones en la izquierda
         navigationItem.leftBarButtonItems = [btnBack, btnSync]
         
         searchBar.delegate = self
@@ -86,7 +87,7 @@ class ProductosViewController: UIViewController {
         tableView.delegate = self
         tableView.dataSource = self
         
-        // Registrar celda personalizada si existe
+        // Registrar celda personalizada
         let nib = UINib(nibName: "ProductoTableViewCell", bundle: nil)
         tableView.register(nib, forCellReuseIdentifier: "ProductoTableViewCell")
         
@@ -103,12 +104,12 @@ class ProductosViewController: UIViewController {
         }
     }
     
-    // ✅ AGREGADO: Método para regresar al menú principal
+    // ✅ NUEVO: Método para regresar al menú principal
     @objc private func regresarAlMenu() {
         navigationController?.popViewController(animated: true)
     }
     
-    // ✅ AGREGADO: Sincronización manual con Firebase
+    // ✅ NUEVO: Sincronización manual con Firebase
     @objc private func sincronizarConFirebase() {
         // Actualizar el botón Sync específicamente
         if let leftButtons = navigationItem.leftBarButtonItems,
@@ -140,14 +141,15 @@ class ProductosViewController: UIViewController {
     
     // MARK: - Métodos
     private func cargarProductos() {
-        productos = coreDataManager.obtenerProductos()
-        
-        // Si hay búsqueda activa, filtrar
-        if estaFiltrando {
-            filtrarProductos(con: searchBar.text ?? "")
-        } else {
-            tableView.reloadData()
+        productos = coreDataManager.obtenerProductos().filter { producto in
+            return producto.value(forKey: "activo") as? Bool ?? true
         }
+        
+        if estaFiltrando {
+            filtrarProductos()
+        }
+        
+        tableView.reloadData()
     }
     
     private func obtenerProductosParaMostrar() -> [NSManagedObject] {
@@ -169,29 +171,28 @@ class ProductosViewController: UIViewController {
         
         alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel))
         
-        // Configurar para iPad
-        if let popover = alert.popoverPresentationController {
-            popover.sourceView = self.view
-            popover.sourceRect = CGRect(x: self.view.bounds.midX, y: self.view.bounds.midY, width: 0, height: 0)
-            popover.permittedArrowDirections = []
-        }
-        
         present(alert, animated: true)
     }
     
     private func confirmarEliminacion(_ producto: NSManagedObject) {
         let nombre = producto.value(forKey: "nombre") as? String ?? ""
         
-        let alert = UIAlertController(title: "Confirmar", message: "¿Está seguro de eliminar '\(nombre)'?", preferredStyle: .alert)
+        let alert = UIAlertController(
+            title: "Confirmar eliminación",
+            message: "¿Estás seguro de que deseas eliminar '\(nombre)'?",
+            preferredStyle: .alert
+        )
         
         alert.addAction(UIAlertAction(title: "Eliminar", style: .destructive) { _ in
-            // Marcar como inactivo en lugar de eliminar
+            // Marcar como inactivo en lugar de eliminar completamente
             producto.setValue(false, forKey: "activo")
             self.coreDataManager.saveContext()
             self.cargarProductos()
             
-            // ✅ AGREGADO: Notificar actualización
+            // Notificar actualización
             NotificationCenter.default.post(name: .productosActualizados, object: nil)
+            
+            self.mostrarExito("Producto eliminado correctamente")
         })
         
         alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel))
@@ -199,7 +200,7 @@ class ProductosViewController: UIViewController {
         present(alert, animated: true)
     }
     
-    // ✅ MODIFICADO: Actualizar stock tanto en CoreData como en Firebase
+    // ✅ NUEVO: Actualizar stock tanto en CoreData como en Firebase
     private func mostrarActualizarStock(_ producto: NSManagedObject) {
         let nombre = producto.value(forKey: "nombre") as? String ?? ""
         
@@ -219,10 +220,11 @@ class ProductosViewController: UIViewController {
                let nuevoStock = Int32(texto) {
                 
                 // 1. Actualizar en CoreData
-                self.coreDataManager.actualizarStockProducto(producto: producto, nuevoStock: nuevoStock)
+                producto.setValue(nuevoStock, forKey: "stock")
+                self.coreDataManager.saveContext()
                 self.cargarProductos()
                 
-                // 2. ✅ AGREGADO: Actualizar en Firebase
+                // 2. ✅ NUEVO: Actualizar en Firebase
                 self.firebaseService.actualizarProducto(nombre: nombre, nuevoStock: Int(nuevoStock)) { result in
                     DispatchQueue.main.async {
                         switch result {
@@ -234,7 +236,7 @@ class ProductosViewController: UIViewController {
                     }
                 }
                 
-                // ✅ AGREGADO: Notificar actualización para que se actualice el menu principal
+                // Notificar actualización para que se actualice el menu principal
                 NotificationCenter.default.post(name: .productosActualizados, object: nil)
             }
         })
@@ -244,22 +246,21 @@ class ProductosViewController: UIViewController {
         present(alert, animated: true)
     }
     
-    private func filtrarProductos(con searchText: String) {
-        if searchText.isEmpty {
+    private func filtrarProductos() {
+        guard let searchText = searchBar.text, !searchText.isEmpty else {
             estaFiltrando = false
-        } else {
-            estaFiltrando = true
-            productosFiltrados = productos.filter { producto in
-                let nombre = producto.value(forKey: "nombre") as? String ?? ""
-                let categoria = producto.value(forKey: "categoria") as? String ?? ""
-                return nombre.localizedCaseInsensitiveContains(searchText) ||
-                       categoria.localizedCaseInsensitiveContains(searchText)
-            }
+            return
         }
         
-        tableView.reloadData()
+        productosFiltrados = productos.filter { producto in
+            let nombre = producto.value(forKey: "nombre") as? String ?? ""
+            let categoria = producto.value(forKey: "categoria") as? String ?? ""
+            return nombre.localizedCaseInsensitiveContains(searchText) ||
+                   categoria.localizedCaseInsensitiveContains(searchText)
+        }
     }
     
+    // ✅ NUEVOS: Métodos de UI Helper
     private func mostrarExito(_ mensaje: String) {
         let alert = UIAlertController(title: "Éxito", message: mensaje, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .default))
@@ -293,7 +294,7 @@ extension ProductosViewController: UITableViewDataSource {
         cell.textLabel?.text = nombre
         cell.detailTextLabel?.text = "\(categoria) • Stock: \(stock) • S/. \(String(format: "%.2f", precio))"
         
-        // Cambiar color si stock es bajo
+        // ✅ NUEVO: Configurar color según stock
         if stock <= stockMinimo {
             cell.textLabel?.textColor = .systemRed
             cell.detailTextLabel?.textColor = .systemRed
@@ -322,7 +323,22 @@ extension ProductosViewController: UITableViewDelegate {
     func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCell.EditingStyle, forRowAt indexPath: IndexPath) {
         if editingStyle == .delete {
             let producto = obtenerProductosParaMostrar()[indexPath.row]
-            confirmarEliminacion(producto)
+            
+            let alert = UIAlertController(title: "Confirmar", message: "¿Está seguro de eliminar este producto?", preferredStyle: .alert)
+            
+            alert.addAction(UIAlertAction(title: "Eliminar", style: .destructive) { _ in
+                // Marcar como inactivo en lugar de eliminar
+                producto.setValue(false, forKey: "activo")
+                self.coreDataManager.saveContext()
+                self.cargarProductos()
+                
+                // Notificar actualización
+                NotificationCenter.default.post(name: .productosActualizados, object: nil)
+            })
+            
+            alert.addAction(UIAlertAction(title: "Cancelar", style: .cancel))
+            
+            present(alert, animated: true)
         }
     }
 }
@@ -330,7 +346,14 @@ extension ProductosViewController: UITableViewDelegate {
 // MARK: - UISearchBarDelegate
 extension ProductosViewController: UISearchBarDelegate {
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) {
-        filtrarProductos(con: searchText)
+        if searchText.isEmpty {
+            estaFiltrando = false
+        } else {
+            estaFiltrando = true
+            filtrarProductos()
+        }
+        
+        tableView.reloadData()
     }
     
     func searchBarSearchButtonClicked(_ searchBar: UISearchBar) {
