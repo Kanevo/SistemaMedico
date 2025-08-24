@@ -219,25 +219,21 @@ class ProductosViewController: UIViewController {
                let texto = textField.text,
                let nuevoStock = Int32(texto) {
                 
-                // 1. Actualizar en CoreData
-                producto.setValue(nuevoStock, forKey: "stock")
-                self.coreDataManager.saveContext()
-                self.cargarProductos()
-                
-                // 2. ✅ NUEVO: Actualizar en Firebase
-                self.firebaseService.actualizarProducto(nombre: nombre, nuevoStock: Int(nuevoStock)) { result in
+                // ✅ USAR MÉTODO UNIVERSAL: Actualiza CoreData + Firebase automáticamente
+                self.coreDataManager.actualizarStockUniversal(producto: producto, nuevoStock: nuevoStock) { exitoso in
                     DispatchQueue.main.async {
-                        switch result {
-                        case .success(_):
+                        self.cargarProductos()
+                        
+                        if exitoso {
                             self.mostrarExito("✅ Stock actualizado en CoreData y Firebase")
-                        case .failure(let error):
-                            self.mostrarError("⚠️ Stock actualizado en CoreData pero falló Firebase: \(error.localizedDescription)")
+                        } else {
+                            self.mostrarError("⚠️ Stock actualizado en CoreData, Firebase pendiente")
                         }
+                        
+                        // Notificar actualización para que se actualice el menu principal
+                        NotificationCenter.default.post(name: .productosActualizados, object: nil)
                     }
                 }
-                
-                // Notificar actualización para que se actualice el menu principal
-                NotificationCenter.default.post(name: .productosActualizados, object: nil)
             }
         })
         

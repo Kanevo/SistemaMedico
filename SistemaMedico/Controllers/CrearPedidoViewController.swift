@@ -83,8 +83,8 @@ class CrearPedidoViewController: UIViewController {
                 coreDataManager.agregarDetallePedido(
                     pedido: pedido,
                     producto: item.producto,
-                    cantidad: Int32(item.cantidad),
-                    firebaseService: firebaseService  
+                    cantidad: Int32(item.cantidad)
+                     
                 )
                 
                 // Preparar para Firebase
