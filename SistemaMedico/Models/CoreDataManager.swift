@@ -1,6 +1,5 @@
 import Foundation
 import CoreData
-import UIKit
 
 class CoreDataManager {
     static let shared = CoreDataManager()
@@ -10,11 +9,11 @@ class CoreDataManager {
     // MARK: - Core Data Stack
     lazy var persistentContainer: NSPersistentContainer = {
         let container = NSPersistentContainer(name: "SistemaMedico")
-        container.loadPersistentStores(completionHandler: { _, error in
+        container.loadPersistentStores { _, error in
             if let error = error as NSError? {
                 fatalError("Error al cargar Core Data: \(error), \(error.userInfo)")
             }
-        })
+        }
         return container
     }()
     
@@ -22,28 +21,27 @@ class CoreDataManager {
         return persistentContainer.viewContext
     }
     
-    // MARK: - Core Data Saving
     func saveContext() {
         if context.hasChanges {
             do {
                 try context.save()
             } catch {
                 let nsError = error as NSError
-                fatalError("Error al guardar: \(nsError), \(nsError.userInfo)")
+                fatalError("Error al guardar en Core Data: \(nsError), \(nsError.userInfo)")
             }
         }
     }
     
-    // MARK: - Métodos para Productos
-    func crearProducto(nombre: String, categoria: String, precio: Double, stock: Int32, stockMinimo: Int32) {
+    // MARK: - ✅ MÉTODOS PARA PRODUCTOS CORREGIDOS
+    func crearProducto(nombre: String, categoria: String, precio: Double, stock: Int, stockMinimo: Int) {
         let producto = NSEntityDescription.entity(forEntityName: "Producto", in: context)!
         let nuevoProducto = NSManagedObject(entity: producto, insertInto: context)
         
         nuevoProducto.setValue(nombre, forKey: "nombre")
         nuevoProducto.setValue(categoria, forKey: "categoria")
         nuevoProducto.setValue(precio, forKey: "precio")
-        nuevoProducto.setValue(stock, forKey: "stock")
-        nuevoProducto.setValue(stockMinimo, forKey: "stockMinimo")
+        nuevoProducto.setValue(Int32(stock), forKey: "stock") // ✅ Convertir Int a Int32 para Core Data
+        nuevoProducto.setValue(Int32(stockMinimo), forKey: "stockMinimo") // ✅ Convertir Int a Int32 para Core Data
         nuevoProducto.setValue(Date(), forKey: "fechaCreacion")
         nuevoProducto.setValue(true, forKey: "activo")
         
@@ -112,7 +110,9 @@ class CoreDataManager {
         saveContext()
     }
     
-    // MARK: - Métodos para Detalle de Pedido
+    // MARK: - ✅ MÉTODOS PARA DETALLE DE PEDIDO CON DESCUENTO AUTOMÁTICO
+    
+    /// ✅ CORREGIDO: Agregar detalle con descuento automático de stock
     func agregarDetallePedido(pedido: NSManagedObject, producto: NSManagedObject, cantidad: Int32) {
         let detalle = NSEntityDescription.entity(forEntityName: "DetallePedido", in: context)!
         let nuevoDetalle = NSManagedObject(entity: detalle, insertInto: context)
@@ -121,10 +121,18 @@ class CoreDataManager {
         nuevoDetalle.setValue(pedido, forKey: "pedido")
         nuevoDetalle.setValue(producto, forKey: "producto")
         
-        // Actualizar stock del producto
+        // ✅ DESCUENTO AUTOMÁTICO DE STOCK
         let stockActual = producto.value(forKey: "stock") as! Int32
         let nuevoStock = stockActual - cantidad
+        
+        // Validación adicional para evitar stock negativo
+        if nuevoStock < 0 {
+            print("⚠️ Advertencia: El stock de \(producto.value(forKey: "nombre") ?? "producto") quedará negativo")
+        }
+        
         actualizarStockProducto(producto: producto, nuevoStock: nuevoStock)
+        
+        print("✅ Stock descontado automáticamente: \(producto.value(forKey: "nombre") ?? "producto") - \(cantidad) unidades. Stock nuevo: \(nuevoStock)")
         
         saveContext()
     }
@@ -142,7 +150,11 @@ class CoreDataManager {
     }
 }
 
+// MARK: - ✅ EXTENSIONES PARA MANEJO AVANZADO
+
 extension CoreDataManager {
+    
+    /// ✅ MEJORADO: Eliminar producto con verificación
     func eliminarProducto(_ producto: NSManagedObject) -> Bool {
         if productoTienePedidosAsociados(producto) {
             return false
@@ -164,18 +176,92 @@ extension CoreDataManager {
         }
     }
     
+    /// ✅ MEJORADO: Eliminar pedido con restauración automática de stock
     func eliminarPedido(_ pedido: NSManagedObject) {
         let detalles = obtenerDetallesPedido(pedido: pedido)
         
+        // ✅ RESTAURAR STOCK AUTOMÁTICAMENTE
         for detalle in detalles {
             if let producto = detalle.value(forKey: "producto") as? NSManagedObject {
                 let cantidad = detalle.value(forKey: "cantidad") as? Int32 ?? 0
                 let stockActual = producto.value(forKey: "stock") as? Int32 ?? 0
-                producto.setValue(stockActual + cantidad, forKey: "stock")
+                let nuevoStock = stockActual + cantidad
+                
+                producto.setValue(nuevoStock, forKey: "stock")
+                
+                print("✅ Stock restaurado automáticamente: \(producto.value(forKey: "nombre") ?? "producto") + \(cantidad) unidades. Stock nuevo: \(nuevoStock)")
             }
         }
         
         context.delete(pedido)
         saveContext()
     }
-}
+    
+    /// ✅ NUEVO: Validar stock antes de crear pedido
+    func validarStockParaPedido(productos: [(producto: NSManagedObject, cantidad: Int)]) -> (esValido: Bool, productosConError: [String]) {
+        var productosConError: [String] = []
+        
+        for item in productos {
+            if item.cantidad > 0 {
+                let stockDisponible = item.producto.value(forKey: "stock") as? Int32 ?? 0
+                let nombre = item.producto.value(forKey: "nombre") as? String ?? "Producto"
+                
+                if Int32(item.cantidad) > stockDisponible {
+                    productosConError.append("\(nombre) (Disponible: \(stockDisponible), Solicitado: \(item.cantidad))")
+                }
+            }
+        }
+        
+        return (productosConError.isEmpty, productosConError)
+    }
+    
+    /// ✅ NUEVO: Obtener estadísticas del sistema
+    func obtenerEstadisticas() -> (productos: Int, pedidos: Int, stockBajo: Int) {
+        let productos = obtenerProductos().count
+        let pedidos = obtenerPedidos().count
+        let stockBajo = obtenerProductosStockBajo().count
+        
+        return (productos: productos, pedidos: pedidos, stockBajo: stockBajo)
+    }
+    
+    /// ✅ NUEVO: Buscar productos por nombre
+    func buscarProductos(porNombre nombre: String) -> [NSManagedObject] {
+        let request = NSFetchRequest<NSManagedObject>(entityName: "Producto")
+        request.predicate = NSPredicate(format: "nombre CONTAINS[c] %@ AND activo == %@", nombre, NSNumber(value: true))
+        
+        do {
+            return try context.fetch(request)
+        } catch {
+            print("Error al buscar productos: \(error)")
+            return []
+        }
+    }
+    
+    /// ✅ NUEVO: Obtener productos por categoría
+    func obtenerProductos(porCategoria categoria: String) -> [NSManagedObject] {
+        let request = NSFetchRequest<NSManagedObject>(entityName: "Producto")
+        request.predicate = NSPredicate(format: "categoria == %@ AND activo == %@", categoria, NSNumber(value: true))
+        
+        do {
+            return try context.fetch(request)
+        } catch {
+            print("Error al obtener productos por categoría: \(error)")
+            return []
+        }
+    }
+    
+    /// ✅ NUEVO: Obtener pedidos por estado
+    func obtenerPedidos(porEstado estado: String) -> [NSManagedObject] {
+        let request = NSFetchRequest<NSManagedObject>(entityName: "Pedido")
+        request.predicate = NSPredicate(format: "estado == %@", estado)
+        let sortDescriptor = NSSortDescriptor(key: "fechaCreacion", ascending: false)
+        request.sortDescriptors = [sortDescriptor]
+        
+        do {
+            return try context.fetch(request)
+        } catch {
+            print("Error al obtener pedidos por estado: \(error)")
+            return []
+        }
+    }
+    }

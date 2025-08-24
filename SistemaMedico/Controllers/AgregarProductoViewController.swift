@@ -58,54 +58,48 @@ class AgregarProductoViewController: UIViewController {
     @IBAction func guardarProducto(_ sender: UIButton) {
         guard validarCampos() else { return }
         
-        // Obtener datos de los campos
+        // ✅ CORREGIDO: Obtener datos de los campos con conversiones correctas
         let nombre = txtNombre.text!.trimmingCharacters(in: .whitespacesAndNewlines)
         let precio = Double(txtPrecio.text!)!
-        let stock = Int32(txtStock.text!)!
-        let stockMinimo = Int32(txtStockMinimo.text!)!
+        let stockInt = Int(txtStock.text!)! // ✅ Primero convertir a Int
+        let stockMinimoInt = Int(txtStockMinimo.text!)! // ✅ Primero convertir a Int
         
-        // ✅ NUEVO: Crear ProductoFirebase con valores reales de stock
+        // ✅ MOSTRAR INDICADOR VISUAL
+        mostrarIndicadorCarga(true)
+        
+        // ✅ NUEVO: Intentar guardar en Firebase primero, luego en CoreData
         let productoFirebase = ProductoFirebase(
-            id: nil,
             nombre: nombre,
             categoria: categoriaSeleccionada,
             precio: precio,
-            descripcion: "Producto médico de alta calidad",
-            stock: Int(stock),
-            stockMinimo: Int(stockMinimo),
-            activo: true,
-            fechaCreacion: Date()
+            descripcion: "Producto médico",
+            stock: stockInt, // ✅ Ya es Int
+            stockMinimo: stockMinimoInt // ✅ Ya es Int
         )
         
-        // Mostrar indicador de carga
-        mostrarIndicadorCarga(true)
-        
-        // ✅ NUEVO: Primero subir a Firebase, luego a CoreData
         firebaseService.subirProducto(producto: productoFirebase) { [weak self] result in
             DispatchQueue.main.async {
                 switch result {
-                case .success(let mensaje):
-                    print("✅ Firebase exitoso: \(mensaje)")
-                    // Si Firebase fue exitoso, guardar en CoreData
+                case .success(_):
+                    // ✅ Éxito en Firebase, ahora guardar en CoreData
                     self?.guardarEnCoreData(
                         nombre: nombre,
                         categoria: self?.categoriaSeleccionada ?? "Medicamentos",
                         precio: precio,
-                        stock: stock,
-                        stockMinimo: stockMinimo,
-                        mensajeExito: "✅ Producto guardado correctamente en CoreData y Firebase"
+                        stock: Int32(stockInt), // ✅ Convertir a Int32 para CoreData
+                        stockMinimo: Int32(stockMinimoInt), // ✅ Convertir a Int32 para CoreData
+                        mensajeExito: "✅ Producto guardado y sincronizado con Firebase exitosamente"
                     )
                     
                 case .failure(let error):
-                    // Si Firebase falla, mostrar error pero aún así guardar en CoreData como respaldo
-                    print("❌ Error subiendo a Firebase: \(error.localizedDescription)")
-                    
+                    // ✅ Error en Firebase, pero guardar localmente
+                    print("⚠️ Error al sincronizar con Firebase: \(error.localizedDescription)")
                     self?.guardarEnCoreData(
                         nombre: nombre,
                         categoria: self?.categoriaSeleccionada ?? "Medicamentos",
                         precio: precio,
-                        stock: stock,
-                        stockMinimo: stockMinimo,
+                        stock: Int32(stockInt), // ✅ Convertir a Int32 para CoreData
+                        stockMinimo: Int32(stockMinimoInt), // ✅ Convertir a Int32 para CoreData
                         mensajeExito: "⚠️ Producto guardado localmente. Error al sincronizar con Firebase: \(error.localizedDescription)"
                     )
                 }
@@ -120,8 +114,8 @@ class AgregarProductoViewController: UIViewController {
             nombre: nombre,
             categoria: categoria,
             precio: precio,
-            stock: stock,
-            stockMinimo: stockMinimo
+            stock: Int(stock), // ✅ CoreDataManager.crearProducto espera Int
+            stockMinimo: Int(stockMinimo) // ✅ CoreDataManager.crearProducto espera Int
         )
         
         mostrarIndicadorCarga(false)
@@ -149,16 +143,16 @@ class AgregarProductoViewController: UIViewController {
             return false
         }
         
-        // Validar stock
+        // ✅ CORREGIDO: Validar stock - convertir a Int primero
         guard let stockTexto = txtStock.text, !stockTexto.isEmpty,
-              let stock = Int32(stockTexto), stock >= 0 else {
+              let stock = Int(stockTexto), stock >= 0 else {
             mostrarError("Por favor ingrese un stock válido")
             return false
         }
         
-        // Validar stock mínimo
+        // ✅ CORREGIDO: Validar stock mínimo - convertir a Int primero
         guard let stockMinimoTexto = txtStockMinimo.text, !stockMinimoTexto.isEmpty,
-              let stockMinimo = Int32(stockMinimoTexto), stockMinimo >= 0 else {
+              let stockMinimo = Int(stockMinimoTexto), stockMinimo >= 0 else {
             mostrarError("Por favor ingrese un stock mínimo válido")
             return false
         }
